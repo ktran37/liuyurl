@@ -13,7 +13,10 @@ const PORT     = process.env.PORT || 3000;
 const BASE_URL = process.env.BASE_URL || null;
 
 // ── Database ──────────────────────────────────────────────────────────────────
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+});
 
 async function initDB() {
   await pool.query(`
@@ -237,6 +240,14 @@ app.get('/:code', async (req, res) => {
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────
-initDB()
-  .then(() => app.listen(PORT, () => console.log(`Linkly running at http://localhost:${PORT}`)))
-  .catch(err => { console.error('DB init failed:', err); process.exit(1); });
+if (require.main === module) {
+  // Local dev
+  initDB()
+    .then(() => app.listen(PORT, () => console.log(`Linkly running at http://localhost:${PORT}`)))
+    .catch(err => { console.error('DB init failed:', err); process.exit(1); });
+} else {
+  // Vercel serverless
+  initDB().catch(console.error);
+}
+
+module.exports = app;
