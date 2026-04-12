@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Linkly — URL Shortener</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="page">
+    <header>
+      <div class="header-top">
+        <div class="logo">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+          </svg>
+          <span>Linkly</span>
+        </div>
+        <div id="header-auth" class="header-auth"></div>
+      </div>
+      <p class="tagline">Shorten long URLs in one click</p>
+    </header>
+
+    <main>
+      <section class="shorten-card">
+        <form id="shorten-form">
+          <div class="input-row">
+            <input
+              type="text"
+              id="url-input"
+              placeholder="Paste your long URL here..."
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <button type="submit" id="shorten-btn">Shorten</button>
+          </div>
+
+          <div class="link-options">
+            <div class="options-row">
+              <span class="opt-label">Type</span>
+              <div class="pills" id="type-pills">
+                <button type="button" class="pill active" data-type="public">Public</button>
+                <button type="button" class="pill" data-type="private">Private</button>
+                <button type="button" class="pill" data-type="temporary">Temporary</button>
+              </div>
+            </div>
+
+            <div class="options-row hidden" id="expiry-row">
+              <span class="opt-label">Expires in</span>
+              <div class="pills" id="expiry-pills">
+                <button type="button" class="pill" data-expiry="1h">1 hour</button>
+                <button type="button" class="pill active" data-expiry="24h">24 hours</button>
+                <button type="button" class="pill" data-expiry="7d">7 days</button>
+                <button type="button" class="pill" data-expiry="30d">30 days</button>
+              </div>
+            </div>
+
+            <div class="options-row">
+              <span class="opt-label">Alias</span>
+              <input
+                type="text"
+                id="alias-input"
+                class="alias-input"
+                placeholder="my-custom-link (optional)"
+                autocomplete="off"
+                spellcheck="false"
+              />
+            </div>
+          </div>
+
+          <p id="error-msg" class="error hidden"></p>
+        </form>
+
+        <div id="result" class="result hidden">
+          <div class="result-inner">
+            <div class="result-info">
+              <span class="result-label">Your short link</span>
+              <a id="short-link" href="#" target="_blank" class="short-link"></a>
+              <span id="original-preview" class="original-preview"></span>
+            </div>
+            <button id="copy-btn" class="copy-btn" title="Copy to clipboard">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+              Copy
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section class="history-section">
+        <div class="history-header">
+          <h2 id="history-title">Recent Links</h2>
+          <button id="refresh-btn" class="icon-btn" title="Refresh">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="23 4 23 10 17 10"/>
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+            </svg>
+          </button>
+        </div>
+        <div id="url-list" class="url-list">
+          <p class="empty-state">No links yet. Shorten your first URL above!</p>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>Built with Node.js &amp; Express</p>
+    </footer>
+  </div>
+
+  <!-- Auth Modal -->
+  <div id="auth-modal" class="modal-backdrop hidden">
+    <div class="modal">
+      <button class="modal-close" id="modal-close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+
+      <div class="modal-tabs">
+        <button class="tab-btn active" data-tab="login">Log in</button>
+        <button class="tab-btn" data-tab="register">Sign up</button>
+      </div>
+
+      <form id="login-form" class="auth-form">
+        <div class="field">
+          <label for="login-email">Email</label>
+          <input type="email" id="login-email" placeholder="you@example.com" autocomplete="email" />
+        </div>
+        <div class="field">
+          <label for="login-password">Password</label>
+          <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" />
+        </div>
+        <p class="auth-error hidden" id="login-error"></p>
+        <button type="submit" class="btn-primary-full">Log in</button>
+      </form>
+
+      <form id="register-form" class="auth-form hidden">
+        <div class="field">
+          <label for="reg-username">Username</label>
+          <input type="text" id="reg-username" placeholder="coolname" autocomplete="username" />
+        </div>
+        <div class="field">
+          <label for="reg-email">Email</label>
+          <input type="email" id="reg-email" placeholder="you@example.com" autocomplete="email" />
+        </div>
+        <div class="field">
+          <label for="reg-password">Password</label>
+          <input type="password" id="reg-password" placeholder="Min. 6 characters" autocomplete="new-password" />
+        </div>
+        <p class="auth-error hidden" id="reg-error"></p>
+        <button type="submit" class="btn-primary-full">Create account</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
