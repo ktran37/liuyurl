@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Linkly — URL Shortener</title>
+  <title>Liuyurl — URL Shortener</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -15,7 +15,7 @@
             <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
             <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
           </svg>
-          <span>Linkly</span>
+          <span>Liuyurl</span>
         </div>
         <div id="header-auth" class="header-auth"></div>
       </div>
@@ -107,7 +107,7 @@
     </main>
 
     <footer>
-      <p>Built with Node.js &amp; Express</p>
+      <p>@2026 by Kim</p>
     </footer>
   </div>
 
@@ -126,6 +126,10 @@
       </div>
 
       <form id="login-form" class="auth-form">
+        <a href="/api/auth/google" class="btn-primary-full" style="background:#fff;color:#333;border:1px solid #ccc;text-align:center;text-decoration:none;margin-bottom:1rem;display:inline-block;padding:10px;box-sizing:border-box;border-radius:4px;">
+          Log in with Google
+        </a>
+        <div style="text-align:center;margin-bottom:1rem;font-size:0.9rem;color:#777;">or using email</div>
         <div class="field">
           <label for="login-email">Email</label>
           <input type="email" id="login-email" placeholder="you@example.com" autocomplete="email" />

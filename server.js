@@ -7,6 +7,8 @@ const session    = require('express-session');
 const pgSession  = require('connect-pg-simple')(session);
 const { Pool }   = require('pg');
 const rateLimit  = require('express-rate-limit');
+const passport   = require('passport');
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
 
 const app      = express();
 const PORT     = process.env.PORT || 3000;
@@ -24,9 +26,19 @@ async function initDB() {
       id            SERIAL PRIMARY KEY,
       username      TEXT UNIQUE NOT NULL,
       email         TEXT UNIQUE NOT NULL,
-      password_hash TEXT NOT NULL,
+      password_hash TEXT,
+      google_id     TEXT UNIQUE,
       created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+    DO $$ BEGIN
+      ALTER TABLE users ALTER COLUMN password_hash DROP NOT NULL;
+    EXCEPTION WHEN others THEN null;
+    END $$;
+    DO $$ BEGIN
+      ALTER TABLE users ADD COLUMN google_id TEXT UNIQUE;
+    EXCEPTION WHEN duplicate_column THEN null;
+    END $$;
+
     CREATE TABLE IF NOT EXISTS urls (
       id           SERIAL PRIMARY KEY,
       code         TEXT UNIQUE NOT NULL,
@@ -50,7 +62,7 @@ app.use(session({
     tableName: 'session',
     createTableIfMissing: true,
   }),
-  secret: process.env.SESSION_SECRET,
+  secret: process.env.SESSION_SECRET || 'a-very-secret-default-key',
   resave: false,
   saveUninitialized: false,
   cookie: {
@@ -61,6 +73,64 @@ app.use(session({
 }));
 
 app.use(express.static(path.join(__dirname, 'public')));
+
+// ── Passport Config ───────────────────────────────────────────────────────────
+passport.serializeUser((user, done) => done(null, user.id));
+passport.deserializeUser(async (id, done) => {
+  try {
+    const { rows } = await pool.query('SELECT id, username, email FROM users WHERE id = $1', [id]);
+    done(null, rows[0]);
+  } catch (err) {
+    done(err, null);
+  }
+});
+app.use(passport.initialize());
+app.use(passport.session());
+
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  passport.use(new GoogleStrategy({
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL: '/auth/google/callback',
+  }, async (accessToken, refreshToken, profile, done) => {
+    try {
+      const email = profile.emails[0].value;
+      const googleId = profile.id;
+      let username = profile.displayName.replace(/[^a-zA-Z0-9]/g, '').substring(0, 20);
+
+      // Check if user exists by google_id
+      let { rows } = await pool.query('SELECT * FROM users WHERE google_id = $1', [googleId]);
+      if (rows.length) return done(null, rows[0]);
+
+      // Check if user exists by email but no google_id
+      rows = (await pool.query('SELECT * FROM users WHERE email = $1', [email])).rows;
+      if (rows.length) {
+        const user = rows[0];
+        await pool.query('UPDATE users SET google_id = $1 WHERE id = $2', [googleId, user.id]);
+        return done(null, user);
+      }
+
+      // Ensure username uniqueness
+      let attempts = 0;
+      let uniqueUsername = username;
+      while (true) {
+        const res = await pool.query('SELECT id FROM users WHERE username = $1', [uniqueUsername]);
+        if (res.rows.length === 0) break;
+        uniqueUsername = username + Math.floor(Math.random() * 1000);
+        if (++attempts > 10) throw new Error('Could not generate unique username');
+      }
+
+      // Create new user
+      const res = await pool.query(
+        'INSERT INTO users (username, email, google_id) VALUES ($1, $2, $3) RETURNING *',
+        [uniqueUsername, email, googleId]
+      );
+      done(null, res.rows[0]);
+    } catch (err) {
+      done(err, null);
+    }
+  }));
+}
 
 // ── Rate limiters ─────────────────────────────────────────────────────────────
 const shortenLimiter = rateLimit({
@@ -81,8 +151,12 @@ const authLimiter = rateLimit({
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function requireAuth(req, res, next) {
-  if (!req.session.userId) return res.status(401).json({ error: 'Not authenticated' });
+  if (!req.session.userId && !req.isAuthenticated()) return res.status(401).json({ error: 'Not authenticated' });
   next();
+}
+
+function getUserId(req) {
+  return req.session.userId || (req.user && req.user.id) || null;
 }
 
 function formatUrl(req, row) {
@@ -101,10 +175,11 @@ function formatUrl(req, row) {
 // ── Auth routes ───────────────────────────────────────────────────────────────
 
 app.get('/api/auth/me', async (req, res) => {
-  if (!req.session.userId) return res.json(null);
+  const userId = getUserId(req);
+  if (!userId) return res.json(null);
   const { rows } = await pool.query(
     'SELECT id, username, email FROM users WHERE id = $1',
-    [req.session.userId]
+    [userId]
   );
   res.json(rows[0] || null);
 });
@@ -150,14 +225,28 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
 });
 
 app.post('/api/auth/logout', (req, res) => {
-  req.session.destroy(() => res.json({ success: true }));
+  if (req.logout) {
+    req.logout((err) => {
+      if (err) return res.status(500).json({ error: 'Logout failed' });
+      req.session.destroy(() => res.json({ success: true }));
+    });
+  } else {
+    req.session.destroy(() => res.json({ success: true }));
+  }
+});
+
+// Google Auth
+app.get('/api/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+
+app.get('/auth/google/callback', passport.authenticate('google', { failureRedirect: '/?error=login_failed' }), (req, res) => {
+  res.redirect('/');
 });
 
 // ── URL routes ────────────────────────────────────────────────────────────────
 
 app.post('/api/shorten', shortenLimiter, async (req, res) => {
   const { url, type = 'public', expiresIn, alias } = req.body;
-  const userId = req.session.userId || null;
+  const userId = getUserId(req);
 
   if (!url) return res.status(400).json({ error: 'URL is required' });
   try { new URL(url); } catch {
@@ -203,7 +292,7 @@ app.post('/api/shorten', shortenLimiter, async (req, res) => {
 });
 
 app.get('/api/urls', async (req, res) => {
-  const userId = req.session.userId;
+  const userId = getUserId(req);
   const { rows } = userId
     ? await pool.query(
         'SELECT * FROM urls WHERE user_id = $1 ORDER BY created_at DESC',
@@ -216,10 +305,11 @@ app.get('/api/urls', async (req, res) => {
 });
 
 app.delete('/api/urls/:code', requireAuth, async (req, res) => {
+  const userId = getUserId(req);
   const { rows } = await pool.query('SELECT * FROM urls WHERE code = $1', [req.params.code]);
   const row = rows[0];
   if (!row) return res.status(404).json({ error: 'Not found' });
-  if (row.user_id !== req.session.userId) return res.status(403).json({ error: 'Forbidden' });
+  if (row.user_id !== userId) return res.status(403).json({ error: 'Forbidden' });
   await pool.query('DELETE FROM urls WHERE code = $1', [req.params.code]);
   res.json({ success: true });
 });
