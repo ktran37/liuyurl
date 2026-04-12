@@ -14,7 +14,7 @@ services:
           name: linkly-db
           property: connectionString
       - key: BASE_URL
-        sync: false   # set manually in Render dashboard to your public URL
+        sync: false   
 
 databases:
   - name: linkly-db
