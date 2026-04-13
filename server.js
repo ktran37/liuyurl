@@ -49,6 +49,14 @@ async function initDB() {
       clicks       INTEGER NOT NULL DEFAULT 0,
       created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS global_stats (
+      id INTEGER PRIMARY KEY,
+      total_links INTEGER NOT NULL DEFAULT 0
+    );
+    INSERT INTO global_stats (id, total_links)
+    VALUES (1, (SELECT COUNT(*) FROM urls))
+    ON CONFLICT (id) DO NOTHING;
   `);
 }
 
@@ -243,10 +251,21 @@ app.get('/auth/google/callback', passport.authenticate('google', { failureRedire
   res.redirect('/');
 });
 
+// ── Stats route ───────────────────────────────────────────────────────────────
+app.get('/api/stats', async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT total_links FROM global_stats WHERE id = 1');
+    res.json({ totalLinks: parseInt(rows[0].total_links, 10) });
+  } catch (err) {
+    console.error('Stats error:', err);
+    res.status(500).json({ error: 'Failed to fetch stats' });
+  }
+});
+
 // ── URL routes ────────────────────────────────────────────────────────────────
 
 app.post('/api/shorten', shortenLimiter, async (req, res) => {
-  const { url, type = 'public', expiresIn, alias } = req.body;
+  const { url, type = 'standard', expiresIn, alias } = req.body;
   const userId = getUserId(req);
 
   if (!url) return res.status(400).json({ error: 'URL is required' });
@@ -271,18 +290,23 @@ app.post('/api/shorten', shortenLimiter, async (req, res) => {
 
   // Expiry
   let expiresAt = null;
-  if (type === 'temporary') {
+  let finalType = type;
+  if (expiresIn && expiresIn !== 'never') {
     const durations = { '1h': 3600000, '24h': 86400000, '7d': 604800000, '30d': 2592000000 };
-    const ms = durations[expiresIn] || durations['24h'];
-    expiresAt = new Date(Date.now() + ms).toISOString();
+    const ms = durations[expiresIn] || null;
+    if (ms) {
+      expiresAt = new Date(Date.now() + ms).toISOString();
+      finalType = 'temporary';
+    }
   }
 
   try {
     const { rows } = await pool.query(
       `INSERT INTO urls (code, original_url, user_id, type, expires_at)
        VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [code, url, userId, type, expiresAt]
+      [code, url, userId, finalType, expiresAt]
     );
+    await pool.query('UPDATE global_stats SET total_links = total_links + 1 WHERE id = 1');
     res.json(formatUrl(req, rows[0]));
   } catch (err) {
     if (err.code === '23505')
@@ -294,14 +318,11 @@ app.post('/api/shorten', shortenLimiter, async (req, res) => {
 
 app.get('/api/urls', async (req, res) => {
   const userId = getUserId(req);
-  const { rows } = userId
-    ? await pool.query(
-        'SELECT * FROM urls WHERE user_id = $1 ORDER BY created_at DESC',
-        [userId]
-      )
-    : await pool.query(
-        "SELECT * FROM urls WHERE type = 'public' ORDER BY created_at DESC"
-      );
+  if (!userId) return res.json([]);
+  const { rows } = await pool.query(
+    'SELECT * FROM urls WHERE user_id = $1 ORDER BY created_at DESC',
+    [userId]
+  );
   res.json(rows.map(r => formatUrl(req, r)));
 });
 

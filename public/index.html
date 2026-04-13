@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Liuyurl — URL Shortener</title>
+  <title> iyurl — URL Shortener</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -11,11 +11,8 @@
     <header>
       <div class="header-top">
         <div class="logo">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
-          </svg>
-          <span>Liuyurl</span>
+          <img src="images/iyurl-logo.png" alt="iyurl logo" width="32" class="logo-image" />
+          <span>iyURL</span>
         </div>
         <div id="header-auth" class="header-auth"></div>
       </div>
@@ -37,20 +34,12 @@
           </div>
 
           <div class="link-options">
-            <div class="options-row">
-              <span class="opt-label">Type</span>
-              <div class="pills" id="type-pills">
-                <button type="button" class="pill active" data-type="public">Public</button>
-                <button type="button" class="pill" data-type="private">Private</button>
-                <button type="button" class="pill" data-type="temporary">Temporary</button>
-              </div>
-            </div>
-
-            <div class="options-row hidden" id="expiry-row">
+            <div class="options-row" id="expiry-row">
               <span class="opt-label">Expires in</span>
               <div class="pills" id="expiry-pills">
+                <button type="button" class="pill active" data-expiry="never">Never</button>
                 <button type="button" class="pill" data-expiry="1h">1 hour</button>
-                <button type="button" class="pill active" data-expiry="24h">24 hours</button>
+                <button type="button" class="pill" data-expiry="24h">24 hours</button>
                 <button type="button" class="pill" data-expiry="7d">7 days</button>
                 <button type="button" class="pill" data-expiry="30d">30 days</button>
               </div>
@@ -108,6 +97,7 @@
 
     <footer>
       <p>@2026 by Kim</p>
+      <p style="font-size: 0.85rem; color: #777; margin-top: 5px;">Total links shortened: <span id="total-links-count">0</span></p>
     </footer>
   </div>
 

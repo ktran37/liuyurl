@@ -451,12 +451,6 @@ body {
   flex-shrink: 0;
 }
 
-.badge-public {
-  background: rgba(74, 222, 128, 0.12);
-  color: #4ade80;
-  border: 1px solid rgba(74, 222, 128, 0.25);
-}
-
 .badge-private {
   background: rgba(251, 191, 36, 0.12);
   color: #fbbf24;
@@ -467,6 +461,12 @@ body {
   background: rgba(251, 146, 60, 0.12);
   color: #fb923c;
   border: 1px solid rgba(251, 146, 60, 0.25);
+}
+
+.badge-standard {
+  background: rgba(148, 163, 184, 0.15);
+  color: #64748b;
+  border: 1px solid rgba(148, 163, 184, 0.3);
 }
 
 .expiry-tag {

@@ -12,7 +12,6 @@ const refreshBtn     = document.getElementById('refresh-btn');
 const toast          = document.getElementById('toast');
 const historyTitle   = document.getElementById('history-title');
 const headerAuth     = document.getElementById('header-auth');
-const typePills      = document.getElementById('type-pills');
 const expiryRow      = document.getElementById('expiry-row');
 const expiryPills    = document.getElementById('expiry-pills');
 const aliasInput     = document.getElementById('alias-input');
@@ -22,11 +21,11 @@ const loginForm      = document.getElementById('login-form');
 const registerForm   = document.getElementById('register-form');
 const loginError     = document.getElementById('login-error');
 const regError       = document.getElementById('reg-error');
+const totalLinksCount = document.getElementById('total-links-count');
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let currentUser  = null;
-let selectedType   = 'public';
-let selectedExpiry = '24h';
+let selectedExpiry = 'never';
 let toastTimer;
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
@@ -181,23 +180,7 @@ registerForm.addEventListener('submit', async e => {
   showToast(`Welcome, ${data.username}!`);
 });
 
-// ── Type / Expiry selector ────────────────────────────────────────────────────
-typePills.addEventListener('click', e => {
-  const btn = e.target.closest('.pill');
-  if (!btn || !btn.dataset.type) return;
-
-  if (btn.dataset.type === 'private' && !currentUser) {
-    openModal('login');
-    showToast('Log in to create private links');
-    return;
-  }
-
-  typePills.querySelectorAll('.pill').forEach(p => p.classList.remove('active'));
-  btn.classList.add('active');
-  selectedType = btn.dataset.type;
-  expiryRow.classList.toggle('hidden', selectedType !== 'temporary');
-});
-
+// ── Expiry selector ───────────────────────────────────────────────────────────
 expiryPills.addEventListener('click', e => {
   const btn = e.target.closest('.pill');
   if (!btn || !btn.dataset.expiry) return;
@@ -216,8 +199,11 @@ async function shortenUrl(url, type, expiresIn, alias) {
   return res.json();
 }
 async function loadUrls() {
-  const res = await fetch('/api/urls');
-  return res.json();
+  if (currentUser) {
+    const res = await fetch('/api/urls');
+    return res.json();
+  }
+  return JSON.parse(localStorage.getItem('localUrls') || '[]');
 }
 async function deleteUrl(code) {
   const res = await fetch(`/api/urls/${code}`, { method: 'DELETE' });
@@ -226,9 +212,9 @@ async function deleteUrl(code) {
 
 // ── Render URL list ───────────────────────────────────────────────────────────
 const BADGE = {
-  public:    { label: 'Public',    cls: 'badge-public'   },
   private:   { label: 'Private',  cls: 'badge-private'  },
   temporary: { label: 'Temp',     cls: 'badge-temp'     },
+  standard:  { label: 'Permanent',     cls: 'badge-standard' }
 };
 
 function renderUrls(urls) {
@@ -238,7 +224,7 @@ function renderUrls(urls) {
   }
 
   urlList.innerHTML = urls.map(item => {
-    const badge    = BADGE[item.type] || BADGE.public;
+    const badge    = BADGE[item.type] || BADGE.standard;
     const expiry   = item.expiresAt
       ? `<span class="expiry-tag">${timeUntil(item.expiresAt)}</span>` : '';
     const canDelete = currentUser && item.userId === currentUser.id;
@@ -322,8 +308,15 @@ form.addEventListener('submit', async e => {
 
   try {
     const alias = aliasInput.value.trim();
-    const data  = await shortenUrl(url, selectedType, selectedExpiry, alias);
+    const type = selectedExpiry === 'never' ? 'standard' : 'temporary';
+    const data  = await shortenUrl(url, type, selectedExpiry, alias);
     if (data.error) { showError(data.error); return; }
+
+    if (!currentUser) {
+      const localUrls = JSON.parse(localStorage.getItem('localUrls') || '[]');
+      localUrls.unshift(data);
+      localStorage.setItem('localUrls', JSON.stringify(localUrls));
+    }
 
     shortLink.href = data.shortUrl;
     shortLink.textContent = data.shortUrl;
@@ -333,6 +326,7 @@ form.addEventListener('submit', async e => {
     aliasInput.value = '';
 
     await loadAndRender();
+    await loadStats();
   } catch {
     showError('Something went wrong. Please try again.');
   } finally {
@@ -359,9 +353,22 @@ copyBtn.addEventListener('click', async () => {
 // ── Refresh ───────────────────────────────────────────────────────────────────
 refreshBtn.addEventListener('click', loadAndRender);
 
+async function loadStats() {
+  try {
+    const res = await fetch('/api/stats');
+    if (res.ok) {
+      const data = await res.json();
+      totalLinksCount.textContent = data.totalLinks;
+    }
+  } catch (err) {
+    console.error('Failed to load stats', err);
+  }
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 (async () => {
   currentUser = await fetchMe();
   renderHeader();
   await loadAndRender();
+  await loadStats();
 })();
