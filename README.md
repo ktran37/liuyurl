@@ -1,4 +1,4 @@
-# Liuyurl — URL Shortener
+# iuyurl — URL Shortener
 
 A full-stack URL shortener with user authentication, link types, and click tracking.
 
