@@ -251,6 +251,35 @@ app.get('/auth/google/callback', passport.authenticate('google', { failureRedire
   res.redirect('/');
 });
 
+// ── SEO routes ────────────────────────────────────────────────────────────────
+app.get('/robots.txt', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'robots.txt'));
+});
+
+app.get('/sitemap.xml', async (req, res) => {
+  try {
+    const baseUrl = BASE_URL || `${req.protocol}://${req.get('host')}`;
+    const { rows: urls } = await pool.query(
+      'SELECT code, created_at FROM urls WHERE (type = $1 OR type = $2) AND (expires_at IS NULL OR expires_at > NOW()) ORDER BY created_at DESC LIMIT 5000',
+      ['public', 'temporary']
+    );
+
+    let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+    xml += '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
+    xml += `  <url>\n    <loc>${baseUrl}/</loc>\n    <changefreq>daily</changefreq>\n    <priority>1.0</priority>\n  </url>\n`;
+    for (const u of urls) {
+      xml += `  <url>\n    <loc>${baseUrl}/${u.code}</loc>\n    <lastmod>${new Date(u.created_at).toISOString()}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.5</priority>\n  </url>\n`;
+    }
+    xml += '</urlset>';
+
+    res.set('Content-Type', 'application/xml');
+    res.send(xml);
+  } catch (err) {
+    console.error('Sitemap error:', err);
+    res.status(500).send('Error generating sitemap');
+  }
+});
+
 // ── Stats route ───────────────────────────────────────────────────────────────
 app.get('/api/stats', async (req, res) => {
   try {
